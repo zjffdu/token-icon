@@ -1,4 +1,3 @@
-import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -6,29 +5,51 @@ import settings_window
 
 
 class TestSettingsWindow(unittest.TestCase):
-    def test_prompt_settings_parses_single_dialog_result(self):
-        completed = subprocess.CompletedProcess(
-            args=["python"],
-            returncode=0,
-            stdout='{"token_key": "abc-key", "refresh_interval": 120}\n',
-            stderr="",
-        )
-        with patch("settings_window.subprocess.run", return_value=completed):
+    def test_prompt_settings_returns_values_when_saved(self):
+        with patch(
+            "settings_window._show_settings_dialog",
+            return_value=(settings_window._DIALOG_SAVE_RESPONSE, " abc-key ", " 120 "),
+        ):
             result = settings_window._prompt_settings("old-token", 60)
 
         self.assertEqual(result, ("abc-key", 120))
 
     def test_prompt_settings_returns_none_when_canceled(self):
-        completed = subprocess.CompletedProcess(
-            args=["python"],
-            returncode=2,
-            stdout="",
-            stderr="",
-        )
-        with patch("settings_window.subprocess.run", return_value=completed):
+        with patch(
+            "settings_window._show_settings_dialog",
+            return_value=(settings_window._DIALOG_CANCEL_RESPONSE, "", "60"),
+        ):
             result = settings_window._prompt_settings("old-token", 60)
 
         self.assertIsNone(result)
+
+    def test_prompt_settings_retries_when_interval_not_integer(self):
+        with patch(
+            "settings_window._show_settings_dialog",
+            side_effect=[
+                (settings_window._DIALOG_SAVE_RESPONSE, "abc-key", "oops"),
+                (settings_window._DIALOG_SAVE_RESPONSE, "abc-key", "300"),
+            ],
+        ) as mock_dialog, patch("settings_window._show_error_alert") as mock_error:
+            result = settings_window._prompt_settings("old-token", 60)
+
+        self.assertEqual(result, ("abc-key", 300))
+        self.assertEqual(mock_dialog.call_count, 2)
+        mock_error.assert_called_once()
+
+    def test_prompt_settings_retries_when_interval_out_of_range(self):
+        with patch(
+            "settings_window._show_settings_dialog",
+            side_effect=[
+                (settings_window._DIALOG_SAVE_RESPONSE, "abc-key", "5"),
+                (settings_window._DIALOG_SAVE_RESPONSE, "abc-key", "300"),
+            ],
+        ) as mock_dialog, patch("settings_window._show_error_alert") as mock_error:
+            result = settings_window._prompt_settings("old-token", 60)
+
+        self.assertEqual(result, ("abc-key", 300))
+        self.assertEqual(mock_dialog.call_count, 2)
+        mock_error.assert_called_once()
 
     def test_open_settings_saves_config_from_single_dialog(self):
         callback_calls = {"count": 0}

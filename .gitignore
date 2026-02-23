@@ -18,6 +18,14 @@ coverage.xml
 build/
 dist/
 *.egg-info/
+*.spec
 
 # macOS
 .DS_Store
+
+# Local tooling
+.claude/
+
+# Temporary icon conversion artifacts
+assets/icon.iconset/
+assets/test-icon.icns

@@ -23,13 +23,41 @@
 uv sync
 ```
 
-## 启动
+## 开发模式启动
 
 ```bash
 uv run python app.py
 ```
 
 启动后会在菜单栏看到应用图标标题（例如 `𝗧 —`）。
+
+## 构建 macOS Application
+
+执行一键构建脚本：
+
+```bash
+./scripts/build_macos_app.sh
+```
+
+这个脚本会先把 `assets/icon-token-orbit-a-1024.png` 转成
+`assets/icon-token-orbit-a.icns`，再进行 PyInstaller 打包。
+
+构建完成后，应用在：
+
+```text
+dist/Token Icon.app
+```
+
+你可以直接双击 `dist/Token Icon.app` 启动，不需要再执行 `uv run python app.py`。
+
+## 发布建议
+
+如果要分发给其他机器，建议额外处理：
+
+- 代码签名（code signing）
+- 公证（notarization）
+
+否则在其他 macOS 上可能会被 Gatekeeper 拦截。
 
 ## 使用说明
 
@@ -63,6 +91,7 @@ uv run python app.py
 ```bash
 uv sync                  # 安装依赖
 uv run python app.py     # 运行应用
+./scripts/build_macos_app.sh  # 构建 .app
 pkill -f "app.py"        # 结束运行中的进程
 ```
 
@@ -73,11 +102,15 @@ pkill -f "app.py"        # 结束运行中的进程
 - `api.py`：请求 token 统计接口
 - `config.py`：配置读写（`~/.config/token-icon/config.json`）
 - `tests/test_settings_window.py`：设置窗口相关测试
+- `packaging_config.py`：打包配置（Bundle 元数据、hidden imports）
+- `scripts/build_macos_app.py`：PyInstaller 构建入口
+- `scripts/build_macos_app.sh`：一键构建脚本
+- `scripts/make_icns_from_png.py`：将 PNG 图标转换为 `.icns`
 
 ## 测试
 
 ```bash
-uv run python -m unittest tests/test_settings_window.py
+uv run python -m unittest tests/test_settings_window.py tests/test_packaging_config.py
 ```
 
 ## 说明

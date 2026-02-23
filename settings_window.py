@@ -1,112 +1,117 @@
-import json
-import subprocess
-import sys
+from __future__ import annotations
+
+try:
+    from AppKit import (
+        NSAlert,
+        NSAlertFirstButtonReturn,
+        NSAlertSecondButtonReturn,
+        NSAlertStyleWarning,
+        NSApplication,
+        NSMakeRect,
+        NSTextField,
+        NSView,
+    )
+except Exception:  # pragma: no cover - AppKit is only available on macOS
+    NSAlert = None
+    NSAlertFirstButtonReturn = 1000
+    NSAlertSecondButtonReturn = 1001
+    NSAlertStyleWarning = None
+    NSApplication = None
+    NSMakeRect = None
+    NSTextField = None
+    NSView = None
 
 from config import load_config, save_config
 
 
-_SETTINGS_DIALOG_SCRIPT = r"""
-import json
-import sys
-import tkinter as tk
-from tkinter import messagebox
-
-default_token = sys.argv[1]
-default_interval = sys.argv[2]
-
-state = {"code": 2, "payload": None}
-
-root = tk.Tk()
-root.title("Token Icon Settings")
-root.resizable(False, False)
-try:
-    root.attributes("-topmost", True)
-except Exception:
-    pass
-
-frame = tk.Frame(root, padx=12, pady=12)
-frame.pack(fill="both", expand=True)
-
-tk.Label(frame, text="Token Key").grid(row=0, column=0, columnspan=2, sticky="w")
-token_entry = tk.Entry(frame, width=48)
-token_entry.grid(row=1, column=0, columnspan=2, sticky="we", pady=(2, 10))
-token_entry.insert(0, default_token)
-
-tk.Label(frame, text="Refresh interval (10-3600)").grid(row=2, column=0, columnspan=2, sticky="w")
-interval_entry = tk.Entry(frame, width=16)
-interval_entry.grid(row=3, column=0, sticky="w", pady=(2, 0))
-interval_entry.insert(0, default_interval)
-
-buttons = tk.Frame(frame)
-buttons.grid(row=4, column=0, columnspan=2, sticky="e", pady=(12, 0))
-
-def on_cancel():
-    state["code"] = 2
-    root.quit()
-
-def on_save():
-    token_key = token_entry.get().strip()
-    interval_text = interval_entry.get().strip()
-    try:
-        interval = int(interval_text)
-    except ValueError:
-        messagebox.showerror(
-            "Invalid interval",
-            "Please enter an integer between 10 and 3600.",
-            parent=root,
-        )
-        return
-
-    if not (10 <= interval <= 3600):
-        messagebox.showerror(
-            "Invalid interval",
-            "Please enter an integer between 10 and 3600.",
-            parent=root,
-        )
-        return
-
-    state["payload"] = {"token_key": token_key, "refresh_interval": interval}
-    state["code"] = 0
-    root.quit()
-
-cancel_btn = tk.Button(buttons, text="Cancel", width=9, command=on_cancel)
-cancel_btn.pack(side="right")
-save_btn = tk.Button(buttons, text="Save", width=9, command=on_save)
-save_btn.pack(side="right", padx=(0, 8))
-
-root.bind("<Return>", lambda _evt: on_save())
-root.bind("<Escape>", lambda _evt: on_cancel())
-root.protocol("WM_DELETE_WINDOW", on_cancel)
-token_entry.focus_set()
-root.mainloop()
-root.destroy()
-
-if state["code"] == 0:
-    print(json.dumps(state["payload"]))
-sys.exit(state["code"])
-"""
+_DIALOG_SAVE_RESPONSE = int(NSAlertFirstButtonReturn)
+_DIALOG_CANCEL_RESPONSE = int(NSAlertSecondButtonReturn)
+_INTERVAL_ERROR = "Please enter an integer between 10 and 3600."
 
 
 def _prompt_settings(default_token: str, default_interval: int) -> tuple[str, int] | None:
-    result = subprocess.run(
-        [sys.executable, "-c", _SETTINGS_DIALOG_SCRIPT, default_token, str(default_interval)],
-        capture_output=True,
-        text=True,
-    )
+    token_value = default_token
+    interval_value = str(default_interval)
 
-    if result.returncode == 2:
-        return None
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or "Failed to open settings dialog")
+    while True:
+        response, token_value, interval_value = _show_settings_dialog(token_value, interval_value)
 
-    try:
-        payload = json.loads(result.stdout.strip())
-        token_key = str(payload["token_key"])
-        interval = int(payload["refresh_interval"])
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-        raise RuntimeError("Invalid settings dialog result") from exc
+        if response != _DIALOG_SAVE_RESPONSE:
+            return None
 
-    return token_key, interval
+        token_key = token_value.strip()
+        interval_text = interval_value.strip()
+
+        try:
+            interval = int(interval_text)
+        except ValueError:
+            _show_error_alert(_INTERVAL_ERROR)
+            continue
+
+        if not (10 <= interval <= 3600):
+            _show_error_alert(_INTERVAL_ERROR)
+            continue
+
+        return token_key, interval
+
+
+def _show_settings_dialog(default_token: str, default_interval: str) -> tuple[int, str, str]:
+    if NSAlert is None or NSView is None or NSTextField is None or NSMakeRect is None:
+        raise RuntimeError("macOS AppKit is required to open settings")
+
+    if NSApplication is not None:
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+
+    alert = NSAlert.alloc().init()
+    alert.setMessageText_("Token Icon Settings")
+    alert.setInformativeText_("Set token key and refresh interval.")
+    alert.addButtonWithTitle_("Save")
+    alert.addButtonWithTitle_("Cancel")
+
+    container = NSView.alloc().initWithFrame_(NSMakeRect(0, 0, 420, 90))
+
+    token_label = _make_label("Token Key", NSMakeRect(0, 68, 140, 16))
+    token_field = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 44, 420, 22))
+    token_field.setStringValue_(default_token)
+
+    interval_label = _make_label("Refresh interval (10-3600)", NSMakeRect(0, 22, 220, 16))
+    interval_field = NSTextField.alloc().initWithFrame_(NSMakeRect(0, 0, 140, 22))
+    interval_field.setStringValue_(default_interval)
+
+    container.addSubview_(token_label)
+    container.addSubview_(token_field)
+    container.addSubview_(interval_label)
+    container.addSubview_(interval_field)
+
+    alert.setAccessoryView_(container)
+    response = int(alert.runModal())
+    return response, str(token_field.stringValue()), str(interval_field.stringValue())
+
+
+def _make_label(text: str, frame):
+    label = NSTextField.alloc().initWithFrame_(frame)
+    label.setStringValue_(text)
+    label.setBezeled_(False)
+    label.setDrawsBackground_(False)
+    label.setEditable_(False)
+    label.setSelectable_(False)
+    return label
+
+
+def _show_error_alert(message: str) -> None:
+    if NSAlert is None:
+        raise RuntimeError(message)
+
+    if NSApplication is not None:
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+
+    alert = NSAlert.alloc().init()
+    alert.setMessageText_("Invalid interval")
+    alert.setInformativeText_(message)
+    if NSAlertStyleWarning is not None:
+        alert.setAlertStyle_(NSAlertStyleWarning)
+    alert.addButtonWithTitle_("OK")
+    alert.runModal()
 
 
 def open_settings(on_save_callback=None):
