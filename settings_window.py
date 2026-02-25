@@ -22,11 +22,13 @@ except Exception:  # pragma: no cover - AppKit is only available on macOS
     NSView = None
 
 from config import load_config, save_config
+from app_logging import setup_logging
 
 
 _DIALOG_SAVE_RESPONSE = int(NSAlertFirstButtonReturn)
 _DIALOG_CANCEL_RESPONSE = int(NSAlertSecondButtonReturn)
 _INTERVAL_ERROR = "Please enter an integer between 10 and 3600."
+LOGGER = setup_logging()
 
 
 def _prompt_settings(default_token: str, default_interval: int) -> tuple[str, int] | None:
@@ -37,6 +39,7 @@ def _prompt_settings(default_token: str, default_interval: int) -> tuple[str, in
         response, token_value, interval_value = _show_settings_dialog(token_value, interval_value)
 
         if response != _DIALOG_SAVE_RESPONSE:
+            LOGGER.info("settings canceled")
             return None
 
         token_key = token_value.strip()
@@ -45,13 +48,16 @@ def _prompt_settings(default_token: str, default_interval: int) -> tuple[str, in
         try:
             interval = int(interval_text)
         except ValueError:
+            LOGGER.warning("settings validation failed: interval is not integer")
             _show_error_alert(_INTERVAL_ERROR)
             continue
 
         if not (10 <= interval <= 3600):
+            LOGGER.warning("settings validation failed: interval out of range")
             _show_error_alert(_INTERVAL_ERROR)
             continue
 
+        LOGGER.info("settings accepted refresh_interval=%s token_len=%s", interval, len(token_key))
         return token_key, interval
 
 

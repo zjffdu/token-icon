@@ -150,7 +150,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/b2/e2/2e6a47951290bd1a2
 
 [[package]]
 name = "token-icon"
-version = "0.1.0"
+version = "0.1.1"
 source = { virtual = "." }
 dependencies = [
     { name = "requests" },

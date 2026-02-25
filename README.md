@@ -86,6 +86,21 @@ dist/Token Icon.app
 }
 ```
 
+## 日志文件位置
+
+运行日志保存到：
+
+```text
+~/.config/token-icon/logs/token-icon.log
+```
+
+常用排查命令：
+
+```bash
+tail -n 100 ~/.config/token-icon/logs/token-icon.log
+tail -f ~/.config/token-icon/logs/token-icon.log
+```
+
 ## 常用命令
 
 ```bash
@@ -110,7 +125,7 @@ pkill -f "app.py"        # 结束运行中的进程
 ## 测试
 
 ```bash
-uv run python -m unittest tests/test_settings_window.py tests/test_packaging_config.py
+uv run python -m unittest tests/test_api.py tests/test_settings_window.py tests/test_packaging_config.py tests/test_app_logging.py
 ```
 
 ## 说明
